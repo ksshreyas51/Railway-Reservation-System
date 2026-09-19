@@ -1,0 +1,128 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        Int       @id @default(autoincrement())
+  name      String
+  email     String    @unique
+  password  String
+  role      String    @default("USER") // USER, ADMIN
+  bookings  Booking[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Train {
+  id          Int        @id @default(autoincrement())
+  name        String
+  number      String     @unique
+  totalSeats  Int
+  routes      Route[]
+  schedules   Schedule[]
+  seats       Seat[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+}
+
+model Station {
+  id            Int            @id @default(autoincrement())
+  name          String
+  code          String         @unique
+  routeStations RouteStation[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+model Route {
+  id            Int            @id @default(autoincrement())
+  trainId       Int
+  train         Train          @relation(fields: [trainId], references: [id])
+  routeStations RouteStation[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+model RouteStation {
+  id            Int      @id @default(autoincrement())
+  routeId       Int
+  route         Route    @relation(fields: [routeId], references: [id])
+  stationId     Int
+  station       Station  @relation(fields: [stationId], references: [id])
+  stopOrder     Int
+  arrivalTime   String   // Storing as string "HH:MM" for simplicity, or DateTime
+  departureTime String
+  distance      Int      // Distance from origin in km
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([routeId, stationId])
+  @@unique([routeId, stopOrder])
+}
+
+model Schedule {
+  id            Int       @id @default(autoincrement())
+  trainId       Int
+  train         Train     @relation(fields: [trainId], references: [id])
+  departureDate DateTime  @db.Date
+  bookings      Booking[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([trainId, departureDate])
+}
+
+model Seat {
+  id         Int      @id @default(autoincrement())
+  trainId    Int
+  train      Train    @relation(fields: [trainId], references: [id])
+  seatNumber String
+  coach      String
+  class      String   // SLEEPER, AC_3TIER, AC_2TIER, AC_1TIER
+  tickets    Ticket[]
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([trainId, seatNumber, coach])
+}
+
+model Booking {
+  id            Int      @id @default(autoincrement())
+  userId        Int
+  user          User     @relation(fields: [userId], references: [id])
+  scheduleId    Int
+  schedule      Schedule @relation(fields: [scheduleId], references: [id])
+  status        String   // PENDING, CONFIRMED, CANCELLED
+  totalFare     Decimal  @db.Decimal(10, 2)
+  paymentStatus String   // PENDING, COMPLETED, FAILED
+  tickets       Ticket[]
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model Ticket {
+  id             Int      @id @default(autoincrement())
+  bookingId      Int
+  booking        Booking  @relation(fields: [bookingId], references: [id])
+  seatId         Int?     // Nullable because WL passengers don't have a seat initially
+  seat           Seat?    @relation(fields: [seatId], references: [id])
+  passengerName  String
+  age            Int
+  gender         String
+  status         String   // CONFIRMED, RAC, WL, CANCELLED
+  waitlistNumber Int?     // Nullable, used if status is WL or RAC
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Ensuring a seat is only booked once per schedule
+  // We can't easily enforce this across tables in Prisma unique constraints, 
+  // so we will handle it with Postgres transaction logic (or a composite unique constraint if we denormalized scheduleId here).
+}

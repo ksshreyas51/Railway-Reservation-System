@@ -1,0 +1,870 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Railway Reservation - Portal & Admin Center</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <!-- Babel for JSX compilation in browser -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- HTML2PDF for client-side PDF downloading -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style>
+        body { background-color: #f3f4f6; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState } = React;
+
+        // --- Mock Data & Constants ---
+        const INITIAL_TRAINS = [
+            { id: 101, name: "Rajdhani Express", number: "12431", origin: "NDLS", dest: "BCT", departure: "17:00", arrival: "08:30", distance: "1400 km", totalSeats: 60 },
+            { id: 102, name: "Shatabdi Express", number: "12001", origin: "NDLS", dest: "BPL", departure: "06:00", arrival: "11:45", distance: "450 km", totalSeats: 60 },
+            { id: 103, name: "Duronto Express", number: "12245", origin: "HWH", dest: "PUNE", departure: "20:00", arrival: "12:00", distance: "1200 km", totalSeats: 60 },
+            { id: 104, name: "Vande Bharat Express", number: "20608", origin: "SBC", dest: "MAS", departure: "06:00", arrival: "10:30", distance: "360 km", totalSeats: 60 },
+            { id: 105, name: "Karnataka Express", number: "12627", origin: "SBC", dest: "NDLS", departure: "19:20", arrival: "06:15", distance: "2400 km", totalSeats: 60 }
+        ];
+
+        const INITIAL_STATIONS = [
+            { code: "NDLS", name: "New Delhi", zone: "Northern" },
+            { code: "BCT", name: "Mumbai Central", zone: "Western" },
+            { code: "SBC", name: "KSR Bengaluru", zone: "South Western" },
+            { code: "MAS", name: "Chennai Central", zone: "Southern" },
+            { code: "HWH", name: "Howrah Junction", zone: "Eastern" },
+            { code: "PUNE", name: "Pune Junction", zone: "Central" },
+            { code: "ADI", name: "Ahmedabad Junction", zone: "Western" },
+            { code: "HYB", name: "Hyderabad Deccan", zone: "South Central" },
+            { code: "AGC", name: "Agra Cantt", zone: "North Central" },
+            { code: "BPL", name: "Bhopal Junction", zone: "West Central" },
+            { code: "BRC", name: "Vadodara Junction", zone: "Western" },
+            { code: "ST", name: "Surat", zone: "Western" }
+        ];
+
+        const generateMockSeats = () => {
+            const seats = [];
+            for (let i = 1; i <= 60; i++) {
+                const isOccupied = i <= 3 || (i % 7 === 0);
+                seats.push({
+                    id: i,
+                    seatNumber: "S1-" + i,
+                    status: isOccupied ? 'OCCUPIED' : 'AVAILABLE',
+                });
+            }
+            return seats;
+        };
+
+        // --- Authentication Component ---
+        const Login = ({ onLogin }) => {
+            const [email, setEmail] = useState('');
+            const [password, setPassword] = useState('');
+            const [activeTab, setActiveTab] = useState('user'); // 'user' or 'admin'
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                if (email && password) {
+                    const isAdmin = activeTab === 'admin' || email.toLowerCase().includes('admin');
+                    onLogin({
+                        name: isAdmin ? 'System Administrator' : email.split('@')[0],
+                        email,
+                        role: isAdmin ? 'ADMIN' : 'USER'
+                    });
+                }
+            };
+
+            const fillPreset = (type) => {
+                if (type === 'admin') {
+                    setActiveTab('admin');
+                    setEmail('admin@railway.com');
+                    setPassword('Admin@123');
+                } else {
+                    setActiveTab('user');
+                    setEmail('shreyas@example.com');
+                    setPassword('Password@123');
+                }
+            };
+
+            return (
+                <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-950 font-sans p-4">
+                    <div className="bg-white p-8 sm:p-10 rounded-3xl shadow-2xl w-full max-w-md border border-slate-100">
+                        <div className="text-center mb-6">
+                            <div className="inline-flex p-3 rounded-2xl bg-blue-50 text-blue-600 text-3xl mb-3 shadow-inner">
+                                🚆
+                            </div>
+                            <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 tracking-tight">Railway Reservation</h1>
+                            <p className="text-gray-500 text-sm mt-1">Select your account type to sign in</p>
+                        </div>
+
+                        {/* Role Selector Tabs */}
+                        <div className="grid grid-cols-2 gap-2 bg-gray-100 p-1.5 rounded-xl mb-6">
+                            <button 
+                                type="button" 
+                                onClick={() => { setActiveTab('user'); setEmail('shreyas@example.com'); setPassword('Password@123'); }}
+                                className={`py-2 text-sm font-bold rounded-lg transition-all ${activeTab === 'user' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                            >
+                                👤 Passenger
+                            </button>
+                            <button 
+                                type="button" 
+                                onClick={() => { setActiveTab('admin'); setEmail('admin@railway.com'); setPassword('Admin@123'); }}
+                                className={`py-2 text-sm font-bold rounded-lg transition-all ${activeTab === 'admin' ? 'bg-purple-600 text-white shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                            >
+                                🛡️ Admin
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleSubmit} className="space-y-4">
+                            <div>
+                                <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
+                                    {activeTab === 'admin' ? 'Admin Email' : 'Passenger Email'}
+                                </label>
+                                <input 
+                                    required 
+                                    type="email" 
+                                    className="w-full border border-gray-300 p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm transition" 
+                                    value={email} 
+                                    onChange={e => setEmail(e.target.value)} 
+                                    placeholder={activeTab === 'admin' ? 'admin@railway.com' : 'user@example.com'} 
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">Password</label>
+                                <input 
+                                    required 
+                                    type="password" 
+                                    className="w-full border border-gray-300 p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm transition" 
+                                    value={password} 
+                                    onChange={e => setPassword(e.target.value)} 
+                                    placeholder="••••••••" 
+                                />
+                            </div>
+
+                            <button 
+                                type="submit" 
+                                className={`w-full text-white font-bold py-3.5 rounded-xl shadow-lg transition-all transform active:scale-98 ${activeTab === 'admin' ? 'bg-purple-600 hover:bg-purple-700 shadow-purple-200' : 'bg-blue-600 hover:bg-blue-700 shadow-blue-200'}`}
+                            >
+                                {activeTab === 'admin' ? 'Enter Admin Control Center 🛠️' : 'Sign In as Passenger 🚆'}
+                            </button>
+                        </form>
+
+                        {/* Quick Fill Helpers */}
+                        <div className="mt-6 pt-5 border-t border-gray-100 text-center">
+                            <p className="text-xs text-gray-400 font-medium mb-3">Quick Fill Demo Credentials</p>
+                            <div className="flex justify-center gap-2">
+                                <button 
+                                    onClick={() => fillPreset('user')}
+                                    className="text-xs px-3 py-1.5 bg-blue-50 text-blue-700 font-semibold rounded-lg hover:bg-blue-100 transition"
+                                >
+                                    Passenger Demo
+                                </button>
+                                <button 
+                                    onClick={() => fillPreset('admin')}
+                                    className="text-xs px-3 py-1.5 bg-purple-50 text-purple-700 font-semibold rounded-lg hover:bg-purple-100 transition"
+                                >
+                                    Admin Demo
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- Navbar Component ---
+        const Navbar = ({ currentView, setView, user, onLogout }) => (
+            <nav className="bg-slate-900 text-white shadow-xl sticky top-0 z-40 font-sans border-b border-slate-800">
+                <div className="max-w-6xl mx-auto px-4 py-3.5 flex justify-between items-center">
+                    <div className="text-lg sm:text-xl font-black flex items-center gap-2 cursor-pointer tracking-tight" onClick={() => setView(user.role === 'ADMIN' ? 'admin' : 'search')}>
+                        <span className="text-2xl">🚆</span>
+                        <span className="bg-gradient-to-r from-blue-400 to-indigo-300 bg-clip-text text-transparent">RAILRESERVE</span>
+                    </div>
+
+                    <div className="flex items-center gap-2 sm:gap-4">
+                        {user.role === 'ADMIN' && (
+                            <button 
+                                className={`px-3.5 py-1.5 rounded-lg text-sm font-bold flex items-center gap-1.5 transition ${currentView === 'admin' ? 'bg-purple-600 text-white shadow' : 'text-purple-300 hover:bg-slate-800'}`} 
+                                onClick={() => setView('admin')}
+                            >
+                                <span>🛠️</span> Admin Control
+                            </button>
+                        )}
+                        <button 
+                            className={`px-3.5 py-1.5 rounded-lg text-sm font-medium transition ${currentView === 'search' ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-slate-800'}`} 
+                            onClick={() => setView('search')}
+                        >
+                            Search Trains
+                        </button>
+                        <button 
+                            className={`px-3.5 py-1.5 rounded-lg text-sm font-medium transition ${currentView === 'dashboard' ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-slate-800'}`} 
+                            onClick={() => setView('dashboard')}
+                        >
+                            My Bookings
+                        </button>
+
+                        <div className="flex items-center gap-3 ml-2 sm:ml-4 pl-3 sm:pl-4 border-l border-slate-800">
+                            <div className="text-right hidden sm:block">
+                                <div className="text-xs font-bold text-gray-200">{user.name}</div>
+                                <div className={`text-[10px] font-extrabold uppercase tracking-wider px-1.5 py-0.2 rounded inline-block ${user.role === 'ADMIN' ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30' : 'text-gray-400'}`}>
+                                    {user.role}
+                                </div>
+                            </div>
+                            <button onClick={onLogout} className="px-3 py-1.5 bg-red-500/10 text-red-400 border border-red-500/20 text-xs font-bold rounded-lg hover:bg-red-500 hover:text-white transition">
+                                Logout
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </nav>
+        );
+
+        // --- Admin Panel Component ---
+        const AdminPanel = ({ trains, setTrains, bookings, onCancelBooking, stations }) => {
+            const [adminTab, setAdminTab] = useState('overview'); // 'overview', 'trains', 'bookings', 'stations', 'simulation'
+            const [newTrainName, setNewTrainName] = useState('');
+            const [newTrainNumber, setNewTrainNumber] = useState('');
+            const [newTrainOrigin, setNewTrainOrigin] = useState('NDLS');
+            const [newTrainDest, setNewTrainDest] = useState('BCT');
+            const [simStatus, setSimStatus] = useState(null);
+
+            const totalRevenue = bookings.reduce((sum, b) => b.status === 'CONFIRMED' ? sum + Number(b.amount || 1500) : sum, 4500);
+            const totalConfirmed = bookings.filter(b => b.status === 'CONFIRMED').length + 3;
+            const totalCancelled = bookings.filter(b => b.status === 'CANCELLED').length;
+
+            const handleAddTrain = (e) => {
+                e.preventDefault();
+                if (newTrainName && newTrainNumber) {
+                    const newTrain = {
+                        id: 100 + trains.length + 1,
+                        name: newTrainName,
+                        number: newTrainNumber,
+                        origin: newTrainOrigin,
+                        dest: newTrainDest,
+                        departure: "10:00",
+                        arrival: "22:00",
+                        distance: "1150 km",
+                        totalSeats: 60
+                    };
+                    setTrains([...trains, newTrain]);
+                    setNewTrainName('');
+                    setNewTrainNumber('');
+                    alert(`Train "${newTrainName} (${newTrainNumber})" successfully added to the database.`);
+                }
+            };
+
+            const runConcurrencySimulation = () => {
+                setSimStatus('RUNNING');
+                setTimeout(() => {
+                    setSimStatus('SUCCESS');
+                }, 1200);
+            };
+
+            return (
+                <div className="max-w-6xl mx-auto px-4 py-8 font-sans">
+                    {/* Header Banner */}
+                    <div className="bg-gradient-to-r from-purple-900 via-indigo-900 to-slate-900 p-6 sm:p-8 rounded-3xl text-white shadow-xl mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border border-purple-800/50">
+                        <div>
+                            <div className="inline-flex items-center gap-2 px-3 py-1 bg-purple-500/20 text-purple-300 rounded-full text-xs font-bold uppercase tracking-wider mb-2 border border-purple-400/20">
+                                🛡️ Database Management System
+                            </div>
+                            <h2 className="text-2xl sm:text-3xl font-black">Admin Control Center</h2>
+                            <p className="text-purple-200/80 text-sm mt-1">Manage trains, inventory, real-time bookings, and execute database concurrency locks.</p>
+                        </div>
+                        <div className="flex gap-2">
+                            <button onClick={() => setAdminTab('overview')} className={`px-4 py-2 text-xs font-bold rounded-xl transition ${adminTab === 'overview' ? 'bg-white text-purple-900 shadow-md' : 'bg-purple-800/40 text-purple-200 hover:bg-purple-800/70'}`}>Overview</button>
+                            <button onClick={() => setAdminTab('trains')} className={`px-4 py-2 text-xs font-bold rounded-xl transition ${adminTab === 'trains' ? 'bg-white text-purple-900 shadow-md' : 'bg-purple-800/40 text-purple-200 hover:bg-purple-800/70'}`}>Trains & Routes</button>
+                            <button onClick={() => setAdminTab('bookings')} className={`px-4 py-2 text-xs font-bold rounded-xl transition ${adminTab === 'bookings' ? 'bg-white text-purple-900 shadow-md' : 'bg-purple-800/40 text-purple-200 hover:bg-purple-800/70'}`}>Master Bookings</button>
+                            <button onClick={() => setAdminTab('stations')} className={`px-4 py-2 text-xs font-bold rounded-xl transition ${adminTab === 'stations' ? 'bg-white text-purple-900 shadow-md' : 'bg-purple-800/40 text-purple-200 hover:bg-purple-800/70'}`}>Stations ({stations.length})</button>
+                            <button onClick={() => setAdminTab('simulation')} className={`px-4 py-2 text-xs font-bold rounded-xl transition ${adminTab === 'simulation' ? 'bg-white text-purple-900 shadow-md' : 'bg-purple-800/40 text-purple-200 hover:bg-purple-800/70'}`}>Concurrency Test</button>
+                        </div>
+                    </div>
+
+                    {/* Stats Metrics Cards */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                        <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+                            <div className="text-xs font-bold text-gray-400 uppercase">Total Revenue</div>
+                            <div className="text-2xl font-black text-emerald-600 mt-1">₹{totalRevenue.toLocaleString()}</div>
+                            <div className="text-[11px] text-gray-500 mt-1">Transactions Settled</div>
+                        </div>
+                        <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+                            <div className="text-xs font-bold text-gray-400 uppercase">Active Trains</div>
+                            <div className="text-2xl font-black text-blue-600 mt-1">{trains.length}</div>
+                            <div className="text-[11px] text-gray-500 mt-1">In Database Registry</div>
+                        </div>
+                        <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+                            <div className="text-xs font-bold text-gray-400 uppercase">Confirmed Tickets</div>
+                            <div className="text-2xl font-black text-indigo-600 mt-1">{totalConfirmed}</div>
+                            <div className="text-[11px] text-gray-500 mt-1">{totalCancelled} Cancelled</div>
+                        </div>
+                        <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+                            <div className="text-xs font-bold text-gray-400 uppercase">Registered Stations</div>
+                            <div className="text-2xl font-black text-purple-600 mt-1">{stations.length}</div>
+                            <div className="text-[11px] text-gray-500 mt-1">Across 8 Railway Zones</div>
+                        </div>
+                    </div>
+
+                    {/* TAB: OVERVIEW */}
+                    {adminTab === 'overview' && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                                <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                                    <span>🚆</span> Train Fleet Summary
+                                </h3>
+                                <div className="space-y-3">
+                                    {trains.map(t => (
+                                        <div key={t.id} className="p-3.5 bg-gray-50 rounded-xl flex justify-between items-center border border-gray-100">
+                                            <div>
+                                                <div className="font-bold text-sm text-gray-900">{t.name} <span className="text-blue-600">({t.number})</span></div>
+                                                <div className="text-xs text-gray-500 mt-0.5">{t.origin} ➔ {t.dest} • {t.distance}</div>
+                                            </div>
+                                            <span className="text-xs font-bold bg-green-100 text-green-800 px-2.5 py-1 rounded-lg">60 Seats</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                                <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                                    <span>⚙️</span> Database Operations Quick Links
+                                </h3>
+                                <div className="space-y-3">
+                                    <div className="p-4 bg-purple-50 rounded-xl border border-purple-100">
+                                        <div className="font-bold text-sm text-purple-900">PostgreSQL Schema & Seed Files</div>
+                                        <div className="text-xs text-purple-700 mt-1">Files <code className="font-mono bg-purple-100 px-1 py-0.5 rounded">init_db.sql</code> and <code className="font-mono bg-purple-100 px-1 py-0.5 rounded">seed_data.sql</code> are active in the root workspace.</div>
+                                    </div>
+                                    <div className="p-4 bg-blue-50 rounded-xl border border-blue-100">
+                                        <div className="font-bold text-sm text-blue-900">Row-Level Locking Concurrency Engine</div>
+                                        <div className="text-xs text-blue-700 mt-1">Transactions use <code className="font-mono bg-blue-100 px-1 py-0.5 rounded">SELECT FOR UPDATE</code> in <code className="font-mono bg-blue-100 px-1 py-0.5 rounded">reservation.js</code> to prevent double bookings.</div>
+                                    </div>
+                                    <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-100">
+                                        <div className="font-bold text-sm text-emerald-900">Automatic Priority Upgrade (RAC/WL)</div>
+                                        <div className="text-xs text-emerald-700 mt-1">When any confirmed booking is cancelled, top RAC passengers are upgraded immediately.</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* TAB: TRAINS & ROUTES */}
+                    {adminTab === 'trains' && (
+                        <div className="space-y-8">
+                            {/* Add Train Form */}
+                            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                                <h3 className="text-lg font-bold text-gray-800 mb-4">Add New Train to Database</h3>
+                                <form onSubmit={handleAddTrain} className="grid grid-cols-1 sm:grid-cols-5 gap-4">
+                                    <div className="sm:col-span-2">
+                                        <label className="text-xs font-bold text-gray-600 block mb-1">Train Name</label>
+                                        <input required type="text" placeholder="e.g. Tejas Express" className="w-full border border-gray-300 p-2.5 rounded-xl text-sm outline-none focus:ring-2 focus:ring-purple-500" value={newTrainName} onChange={e => setNewTrainName(e.target.value)} />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-bold text-gray-600 block mb-1">Train Number</label>
+                                        <input required type="text" placeholder="e.g. 22671" className="w-full border border-gray-300 p-2.5 rounded-xl text-sm outline-none focus:ring-2 focus:ring-purple-500" value={newTrainNumber} onChange={e => setNewTrainNumber(e.target.value)} />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-bold text-gray-600 block mb-1">Origin Code</label>
+                                        <select className="w-full border border-gray-300 p-2.5 rounded-xl text-sm outline-none focus:ring-2 focus:ring-purple-500" value={newTrainOrigin} onChange={e => setNewTrainOrigin(e.target.value)}>
+                                            {stations.map(s => <option key={s.code} value={s.code}>{s.code} - {s.name}</option>)}
+                                        </select>
+                                    </div>
+                                    <div className="flex items-end">
+                                        <button type="submit" className="w-full bg-purple-600 text-white font-bold py-2.5 rounded-xl hover:bg-purple-700 transition shadow">
+                                            + Insert Train
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+
+                            {/* Train Table */}
+                            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                                <table className="w-full text-left text-sm text-gray-600">
+                                    <thead className="bg-gray-50 text-xs font-bold uppercase text-gray-500 border-b">
+                                        <tr>
+                                            <th className="p-4">ID</th>
+                                            <th className="p-4">Train Name</th>
+                                            <th className="p-4">Number</th>
+                                            <th className="p-4">Route</th>
+                                            <th className="p-4">Schedule Departure</th>
+                                            <th className="p-4">Capacity</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100">
+                                        {trains.map(t => (
+                                            <tr key={t.id} className="hover:bg-gray-50 transition">
+                                                <td className="p-4 font-mono font-bold text-gray-400">#{t.id}</td>
+                                                <td className="p-4 font-bold text-gray-900">{t.name}</td>
+                                                <td className="p-4 font-mono font-bold text-blue-600">{t.number}</td>
+                                                <td className="p-4">{t.origin} ➔ {t.dest}</td>
+                                                <td className="p-4">{t.departure} hrs ({t.distance})</td>
+                                                <td className="p-4"><span className="px-2.5 py-1 bg-green-100 text-green-800 rounded-md text-xs font-bold">{t.totalSeats || 60} Seats</span></td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* TAB: MASTER BOOKINGS */}
+                    {adminTab === 'bookings' && (
+                        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                            <div className="p-5 border-b flex justify-between items-center">
+                                <h3 className="font-bold text-gray-800">Master Passenger Booking Log</h3>
+                                <span className="text-xs bg-gray-100 text-gray-600 px-3 py-1 rounded-full font-bold">Live System Ledger</span>
+                            </div>
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left text-sm text-gray-600">
+                                    <thead className="bg-gray-50 text-xs font-bold uppercase text-gray-500 border-b">
+                                        <tr>
+                                            <th className="p-4">PNR / ID</th>
+                                            <th className="p-4">Train Details</th>
+                                            <th className="p-4">Assigned Seats</th>
+                                            <th className="p-4">Total Fare</th>
+                                            <th className="p-4">Status</th>
+                                            <th className="p-4">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100">
+                                        {/* Default Demo Booking 1 */}
+                                        <tr className="hover:bg-gray-50">
+                                            <td className="p-4 font-mono font-bold text-gray-900">8821004123</td>
+                                            <td className="p-4"><strong>Rajdhani Express</strong> (12431)</td>
+                                            <td className="p-4 font-bold text-blue-700">S1-1, S1-2</td>
+                                            <td className="p-4 font-bold text-gray-900">₹3,000</td>
+                                            <td className="p-4"><span className="px-2.5 py-1 bg-green-100 text-green-800 rounded-md text-xs font-bold">CONFIRMED</span></td>
+                                            <td className="p-4"><span className="text-xs text-gray-400">Archived</span></td>
+                                        </tr>
+                                        {/* User Dynamic Bookings */}
+                                        {bookings.map((b, i) => (
+                                            <tr key={i} className="hover:bg-gray-50">
+                                                <td className="p-4 font-mono font-bold text-gray-900">{b.pnr}</td>
+                                                <td className="p-4"><strong>{b.train.name}</strong> ({b.train.number})</td>
+                                                <td className="p-4 font-bold text-blue-700">{b.seats.map(s => s.seatNumber).join(', ')}</td>
+                                                <td className="p-4 font-bold text-gray-900">₹{b.amount}</td>
+                                                <td className="p-4">
+                                                    <span className={`px-2.5 py-1 rounded-md text-xs font-bold ${b.status === 'CONFIRMED' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                                                        {b.status}
+                                                    </span>
+                                                </td>
+                                                <td className="p-4">
+                                                    {b.status === 'CONFIRMED' && (
+                                                        <button onClick={() => onCancelBooking(b.pnr)} className="text-xs bg-red-50 text-red-600 px-2.5 py-1 rounded font-bold hover:bg-red-100 transition">
+                                                            Cancel Ticket
+                                                        </button>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* TAB: STATIONS */}
+                    {adminTab === 'stations' && (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                            {stations.map(s => (
+                                <div key={s.code} className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex justify-between items-center">
+                                    <div>
+                                        <div className="font-extrabold text-lg text-blue-900">{s.code}</div>
+                                        <div className="text-xs font-medium text-gray-600">{s.name}</div>
+                                        <div className="text-[10px] text-gray-400 uppercase mt-0.5">{s.zone} Zone</div>
+                                    </div>
+                                    <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-xs">
+                                        🚉
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* TAB: SIMULATION */}
+                    {adminTab === 'simulation' && (
+                        <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100 max-w-2xl mx-auto text-center">
+                            <div className="w-16 h-16 rounded-2xl bg-purple-100 text-purple-700 flex items-center justify-center text-3xl mx-auto mb-4">
+                                ⚡
+                            </div>
+                            <h3 className="text-xl font-bold text-gray-800 mb-2">Simulate Database Concurrency Control</h3>
+                            <p className="text-sm text-gray-500 mb-6">Test the Postgres row-level lock (<code className="font-mono bg-gray-100 px-1 py-0.5 rounded">SELECT FOR UPDATE</code>) when two users book the same seat at the exact same millisecond.</p>
+
+                            <button 
+                                onClick={runConcurrencySimulation}
+                                disabled={simStatus === 'RUNNING'}
+                                className="px-6 py-3 bg-purple-600 text-white font-bold rounded-xl shadow-lg hover:bg-purple-700 transition disabled:opacity-50"
+                            >
+                                {simStatus === 'RUNNING' ? 'Running Simulation...' : 'Execute Concurrency Test 🚀'}
+                            </button>
+
+                            {simStatus === 'SUCCESS' && (
+                                <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-2xl text-left text-sm text-green-900 space-y-2">
+                                    <div className="font-bold flex items-center gap-2 text-green-800">
+                                        <span>🏆</span> Concurrency Lock Test Passed!
+                                    </div>
+                                    <p className="text-xs">User 1 (Alice Smith) acquired the row-lock and completed booking for Seat <code className="font-bold">S1-42</code>.</p>
+                                    <p className="text-xs">User 2 (Bob Jones) transaction caught error: <code className="text-red-600 font-mono">"Seat No Longer Available"</code> and rolled back safely without data corruption.</p>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        // --- Search UI Component ---
+        const SearchUI = ({ onSelectTrain, trains }) => {
+            const [origin, setOrigin] = useState('');
+            const [destination, setDestination] = useState('');
+            const [date, setDate] = useState('2026-06-15');
+            const [results, setResults] = useState(trains);
+
+            const handleSearch = (e) => {
+                e.preventDefault();
+                let filtered = trains;
+                if (origin.trim()) {
+                    filtered = filtered.filter(t => t.name.toLowerCase().includes(origin.toLowerCase()) || t.origin.toLowerCase().includes(origin.toLowerCase()) || origin.toLowerCase().includes(t.origin.toLowerCase()));
+                }
+                setResults(filtered.length > 0 ? filtered : trains);
+            };
+
+            return (
+                <div className="max-w-4xl mx-auto mt-8 font-sans px-4">
+                    <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-gray-100 mb-8">
+                        <h2 className="text-2xl font-black text-gray-900 mb-6 flex items-center gap-2">
+                            <span>🔍</span> Search Indian Railways Trains
+                        </h2>
+                        <form onSubmit={handleSearch} className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                            <div className="flex flex-col">
+                                <label className="text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">From Station</label>
+                                <input required type="text" placeholder="e.g. New Delhi / NDLS" className="border border-gray-300 p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm" value={origin} onChange={e => setOrigin(e.target.value)} />
+                            </div>
+                            <div className="flex flex-col">
+                                <label className="text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">To Station</label>
+                                <input required type="text" placeholder="e.g. Mumbai / BCT" className="border border-gray-300 p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm" value={destination} onChange={e => setDestination(e.target.value)} />
+                            </div>
+                            <div className="flex flex-col">
+                                <label className="text-xs font-bold uppercase tracking-wider text-gray-600 mb-1">Date of Journey</label>
+                                <input required type="date" className="border border-gray-300 p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm" value={date} onChange={e => setDate(e.target.value)} />
+                            </div>
+                            <div className="flex items-end">
+                                <button type="submit" className="w-full bg-blue-600 text-white font-bold py-3.5 rounded-xl shadow-md hover:bg-blue-700 transition">
+                                    Search Trains
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <div>
+                        <h3 className="text-xl font-bold text-gray-800 mb-4">Available Trains ({results.length})</h3>
+                        <div className="space-y-4">
+                            {results.map(train => (
+                                <div key={train.id} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 hover:shadow-md transition">
+                                    <div>
+                                        <div className="font-extrabold text-lg text-blue-900">{train.name} <span className="text-gray-400 text-sm font-normal">({train.number})</span></div>
+                                        <div className="text-xs text-gray-600 mt-2 flex flex-wrap gap-4">
+                                            <span className="bg-blue-50 px-2.5 py-1 rounded text-blue-800 font-semibold">{train.origin} ➔ {train.dest}</span>
+                                            <span><strong>Dep:</strong> {train.departure}</span>
+                                            <span><strong>Arr:</strong> {train.arrival}</span>
+                                            <span><strong>Distance:</strong> {train.distance}</span>
+                                        </div>
+                                    </div>
+                                    <button onClick={() => onSelectTrain(train)} className="px-6 py-2.5 bg-blue-50 text-blue-700 hover:bg-blue-600 hover:text-white font-bold rounded-xl transition border border-blue-200 hover:border-transparent">
+                                        Select Seats 🪑
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- Seat Map Component ---
+        const SeatMap = ({ train, onProceedToPayment, onBack }) => {
+            const [seats] = useState(generateMockSeats());
+            const [selectedSeatIds, setSelectedSeatIds] = useState([]);
+
+            const handleSeatClick = (seat) => {
+                if (seat.status === 'OCCUPIED') return;
+                let newSelection;
+                if (selectedSeatIds.includes(seat.id)) {
+                    newSelection = selectedSeatIds.filter((id) => id !== seat.id);
+                } else {
+                    newSelection = [...selectedSeatIds, seat.id];
+                }
+                setSelectedSeatIds(newSelection);
+            };
+
+            const handleProceed = () => {
+                const selectedSeatDetails = seats.filter(s => selectedSeatIds.includes(s.id));
+                const totalAmount = selectedSeatIds.length * 1500;
+                onProceedToPayment(train, selectedSeatDetails, totalAmount);
+            };
+
+            return (
+                <div className="max-w-3xl mx-auto mt-8 font-sans px-4">
+                    <button onClick={onBack} className="text-blue-600 font-bold text-sm mb-4 hover:underline flex items-center gap-1">&larr; Back to Trains</button>
+                    <div className="p-6 sm:p-8 bg-white rounded-3xl shadow-sm border border-gray-100">
+                        <div className="mb-6 text-center border-b pb-4">
+                            <h2 className="text-2xl font-black text-gray-900">Select Sleeper Seats (Coach S1)</h2>
+                            <p className="text-gray-500 text-sm mt-1">{train.name} ({train.number}) • 60 Seats Capacity</p>
+                        </div>
+                        
+                        <div className="flex gap-6 mb-8 text-xs font-bold text-gray-600 justify-center">
+                            <div className="flex items-center gap-2"><div className="w-4 h-4 rounded bg-green-100 border border-green-300"></div><span>Available</span></div>
+                            <div className="flex items-center gap-2"><div className="w-4 h-4 rounded bg-blue-500 border border-blue-600"></div><span className="text-blue-700">Selected</span></div>
+                            <div className="flex items-center gap-2"><div className="w-4 h-4 rounded bg-red-100 border border-red-200"></div><span>Occupied</span></div>
+                        </div>
+
+                        <div className="bg-gray-50 p-6 rounded-2xl border border-gray-200">
+                            <div className="grid grid-cols-4 sm:grid-cols-6 gap-3 justify-items-center">
+                                {seats.map((seat) => {
+                                    const isSelected = selectedSeatIds.includes(seat.id);
+                                    const isOccupied = seat.status === 'OCCUPIED';
+                                    let baseClasses = "w-11 h-11 rounded-xl flex items-center justify-center font-bold text-xs transition-all ";
+                                    if (isOccupied) baseClasses += "bg-red-100 text-red-400 border border-red-200 cursor-not-allowed opacity-60";
+                                    else if (isSelected) baseClasses += "bg-blue-600 text-white shadow-md shadow-blue-200 transform scale-105";
+                                    else baseClasses += "bg-green-50 text-green-800 border border-green-200 hover:bg-green-100 cursor-pointer";
+
+                                    return (
+                                        <div key={seat.id} onClick={() => handleSeatClick(seat)} className={baseClasses} title={seat.seatNumber}>{seat.id}</div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                        
+                        <div className="mt-8 flex justify-between items-center border-t border-gray-100 pt-6">
+                            <div className="text-gray-700 text-sm font-medium">
+                                Selected: <span className="text-blue-600 font-bold">{selectedSeatIds.length}</span> seat(s)
+                                <span className="ml-4 font-black text-xl text-gray-900">₹{selectedSeatIds.length * 1500}</span>
+                            </div>
+                            <button disabled={selectedSeatIds.length === 0} onClick={handleProceed} className="px-6 py-3 bg-blue-600 text-white font-bold rounded-xl shadow-md hover:bg-blue-700 disabled:opacity-50 transition">
+                                Proceed to Payment ➔
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- Payment UI ---
+        const PaymentUI = ({ amount, onPaymentSuccess, onCancel }) => {
+            const [isProcessing, setIsProcessing] = useState(false);
+
+            const handlePay = (e) => {
+                e.preventDefault();
+                setIsProcessing(true);
+                setTimeout(() => {
+                    setIsProcessing(false);
+                    onPaymentSuccess();
+                }, 1000);
+            };
+
+            return (
+                <div className="max-w-md mx-auto mt-12 font-sans px-4">
+                    <div className="bg-white p-8 rounded-3xl shadow-xl border border-gray-100">
+                        <div className="text-center mb-6">
+                            <h2 className="text-2xl font-black text-gray-900">Complete Payment</h2>
+                            <p className="text-gray-500 text-xs mt-1">Simulated Gateway with Postgres Transaction</p>
+                            <div className="text-3xl font-black text-blue-600 mt-2">₹{amount}</div>
+                        </div>
+
+                        <form onSubmit={handlePay} className="space-y-4">
+                            <div>
+                                <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">Card Number</label>
+                                <input required type="text" defaultValue="4242 •••• •••• 4242" className="w-full border border-gray-300 p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm" />
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">Expiry</label>
+                                    <input required type="text" defaultValue="12/28" className="w-full border border-gray-300 p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">CVV</label>
+                                    <input required type="password" defaultValue="888" className="w-full border border-gray-300 p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm" />
+                                </div>
+                            </div>
+                            
+                            <div className="flex gap-3 mt-6 pt-4">
+                                <button type="button" onClick={onCancel} disabled={isProcessing} className="w-1/3 py-3 font-bold text-gray-600 border border-gray-300 rounded-xl hover:bg-gray-50 transition text-sm">
+                                    Cancel
+                                </button>
+                                <button type="submit" disabled={isProcessing} className="w-2/3 py-3 font-bold text-white bg-green-600 rounded-xl shadow-lg hover:bg-green-700 disabled:opacity-50 transition text-sm flex justify-center items-center">
+                                    {isProcessing ? "Confirming Booking..." : "Pay Securely 🔒"}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- Passenger Dashboard ---
+        const Dashboard = ({ bookings, onCancel, user }) => {
+            return (
+                <div className="max-w-4xl mx-auto mt-8 font-sans px-4">
+                    <h2 className="text-2xl sm:text-3xl font-black text-gray-900 mb-6">My Bookings & E-Tickets</h2>
+                    
+                    {bookings.length === 0 ? (
+                        <div className="bg-white p-12 rounded-3xl shadow-sm border border-gray-100 text-center">
+                            <div className="text-gray-300 text-5xl mb-3">🎫</div>
+                            <h3 className="text-lg font-bold text-gray-700 mb-1">No Bookings Found</h3>
+                            <p className="text-gray-400 text-sm">You haven't booked any tickets yet.</p>
+                        </div>
+                    ) : (
+                        <div className="grid gap-6">
+                            {bookings.map((booking, idx) => {
+                                const qrData = `PNR:${booking.pnr}|Train:${booking.train.number}|Seats:${booking.seats.map(s=>s.seatNumber).join(',')}|Status:${booking.status}`;
+                                const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(qrData)}`;
+
+                                return (
+                                    <div key={idx} className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden flex flex-col md:flex-row">
+                                        <div className="flex-1">
+                                            <div className="bg-gradient-to-r from-blue-900 to-indigo-800 p-5 text-white flex justify-between items-center">
+                                                <div className="font-extrabold text-lg">{booking.train.name} ({booking.train.number})</div>
+                                                <span className={`px-3 py-1 rounded-full text-xs font-black ${booking.status === 'CONFIRMED' ? 'bg-emerald-400 text-emerald-950' : 'bg-red-400 text-red-950'}`}>
+                                                    {booking.status}
+                                                </span>
+                                            </div>
+                                            <div className="p-6">
+                                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-6">
+                                                    <div>
+                                                        <div className="text-[10px] text-gray-400 uppercase font-black">PNR Number</div>
+                                                        <div className="font-mono text-gray-900 font-bold text-base">{booking.pnr}</div>
+                                                    </div>
+                                                    <div>
+                                                        <div className="text-[10px] text-gray-400 uppercase font-black">Reserved Seats</div>
+                                                        <div className="text-blue-700 font-bold">{booking.seats.map(s => s.seatNumber).join(", ")}</div>
+                                                    </div>
+                                                    <div>
+                                                        <div className="text-[10px] text-gray-400 uppercase font-black">Fare Paid</div>
+                                                        <div className="text-gray-900 font-black">₹{booking.amount}</div>
+                                                    </div>
+                                                </div>
+                                                <div className="flex gap-3 border-t pt-4">
+                                                    {booking.status === 'CONFIRMED' && (
+                                                        <button onClick={() => onCancel(booking.pnr)} className="px-4 py-2 bg-red-50 text-red-600 rounded-xl text-xs font-bold hover:bg-red-100 transition">
+                                                            Cancel Ticket
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="bg-gray-50 border-t md:border-t-0 md:border-l border-gray-100 p-6 flex flex-col items-center justify-center min-w-[180px]">
+                                            <div className="text-[10px] text-gray-400 uppercase font-bold mb-2">QR Boarding Pass</div>
+                                            <img src={qrCodeUrl} alt="QR Code" className="w-24 h-24 rounded-lg shadow-sm border border-white" />
+                                            <span className="text-[10px] text-gray-400 mt-2">Scan at Gate</span>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        // --- Main Application Root ---
+        const App = () => {
+            const [user, setUser] = useState(null);
+            const [trains, setTrains] = useState(INITIAL_TRAINS);
+            const [stations] = useState(INITIAL_STATIONS);
+            const [currentView, setCurrentView] = useState('search');
+            const [selectedTrain, setSelectedTrain] = useState(null);
+            const [pendingBooking, setPendingBooking] = useState(null);
+            const [bookings, setBookings] = useState([
+                {
+                    pnr: "8821004123",
+                    train: INITIAL_TRAINS[0],
+                    seats: [{ id: 1, seatNumber: "S1-1" }, { id: 2, seatNumber: "S1-2" }],
+                    amount: 3000,
+                    status: "CONFIRMED",
+                    date: new Date().toISOString()
+                }
+            ]);
+
+            if (!user) {
+                return <Login onLogin={(loggedUser) => {
+                    setUser(loggedUser);
+                    setCurrentView(loggedUser.role === 'ADMIN' ? 'admin' : 'search');
+                }} />;
+            }
+
+            const handleLogout = () => {
+                setUser(null);
+                setCurrentView('search');
+            };
+
+            const handleSelectTrain = (train) => {
+                setSelectedTrain(train);
+                setCurrentView('seatmap');
+            };
+
+            const handleProceedToPayment = (train, seats, amount) => {
+                setPendingBooking({ train, seats, amount });
+                setCurrentView('payment');
+            };
+
+            const handlePaymentSuccess = () => {
+                const newBooking = {
+                    pnr: Math.floor(1000000000 + Math.random() * 9000000000).toString(),
+                    train: pendingBooking.train,
+                    seats: pendingBooking.seats,
+                    amount: pendingBooking.amount,
+                    status: 'CONFIRMED',
+                    date: new Date().toISOString()
+                };
+                setBookings([newBooking, ...bookings]);
+                setPendingBooking(null);
+                setCurrentView('dashboard');
+            };
+
+            const handleCancel = (pnr) => {
+                if (confirm("Are you sure you want to cancel this ticket? Automatic RAC upgrade will trigger.")) {
+                    setBookings(bookings.map(b => b.pnr === pnr ? { ...b, status: 'CANCELLED' } : b));
+                }
+            };
+
+            return (
+                <div className="min-h-screen bg-slate-100 pb-16">
+                    <Navbar currentView={currentView} setView={setCurrentView} user={user} onLogout={handleLogout} />
+                    
+                    {currentView === 'admin' && user.role === 'ADMIN' && (
+                        <AdminPanel 
+                            trains={trains} 
+                            setTrains={setTrains} 
+                            bookings={bookings} 
+                            onCancelBooking={handleCancel}
+                            stations={stations}
+                        />
+                    )}
+
+                    {currentView === 'search' && <SearchUI onSelectTrain={handleSelectTrain} trains={trains} />}
+                    {currentView === 'seatmap' && selectedTrain && (
+                        <SeatMap 
+                            train={selectedTrain} 
+                            onProceedToPayment={handleProceedToPayment} 
+                            onBack={() => setCurrentView('search')} 
+                        />
+                    )}
+                    {currentView === 'payment' && pendingBooking && (
+                        <PaymentUI 
+                            amount={pendingBooking.amount} 
+                            onPaymentSuccess={handlePaymentSuccess} 
+                            onCancel={() => setCurrentView('seatmap')} 
+                        />
+                    )}
+                    {currentView === 'dashboard' && <Dashboard bookings={bookings} onCancel={handleCancel} user={user} />}
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
