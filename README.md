@@ -88,9 +88,11 @@ Start the development server:
 ```bash
 npm run dev
 ```
+> The backend API will be available at: **http://localhost:5000**
 
 ### 3. Frontend Setup
-Open `client/index.html` in any modern web browser or serve it using Live Server / static file server.
+Open `client/index.html` in any modern web browser or serve it using Live Server (e.g., VS Code extension) / static file server.
+> If using Live Server, the frontend will typically be available at: **http://127.0.0.1:5500/client/index.html**
 
 ---
 
